@@ -1,0 +1,5 @@
+# Local runtime configuration
+.env
+
+# Compiled binary
+/tcp-channel

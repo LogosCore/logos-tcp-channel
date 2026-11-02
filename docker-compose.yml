@@ -1,0 +1,37 @@
+# Local development stack for logos-tcp-channel. Joins logos-core's network
+# to reach core and its RabbitMQ. Start logos-core first (`make services` in
+# logos-core), set RABBITMQ_PASSWORD (core's RABBITMQ_DEFAULT_PASS) in .env,
+# then:
+#
+#   docker compose up -d --build
+#
+# A minion running on this machine is reached as host.docker.internal: add
+# a target with that host (and the minion's listen port).
+services:
+  tcp-channel:
+    build:
+      context: .
+      args:
+        VERSION: dev
+    image: logos-tcp-channel:dev
+    container_name: logos-tcp-channel
+    restart: unless-stopped
+    environment:
+      CHANNEL_ID: ${CHANNEL_ID:-tcp-local}
+      LOGOS_CORE_BASE_URL: ${LOGOS_CORE_BASE_URL:-http://logos-core-dev:8002}
+      MAX_CONNECTIONS: ${MAX_CONNECTIONS:-1000}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      RABBITMQ_HOST: ${RABBITMQ_HOST:-logos-rabbitmq}
+      RABBITMQ_PORT: ${RABBITMQ_PORT:-5672}
+      RABBITMQ_USER: ${RABBITMQ_USER:-logos}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    networks:
+      - logos
+
+networks:
+  logos:
+    external: true
+    name: logos-core_logos
