@@ -31,9 +31,10 @@ import (
 // version is reported at registration; set with -ldflags "-X main.version=...".
 var version = "dev"
 
-// icon is the channel's icon in core's UI: two hosts and the connection
-// between them, the dialer's arrow toward the listener. Line art, so it
-// reads light or dark; iconLight has heavier lines for light themes.
+// icon is the channel's icon in core's UI: two Ethernet ports (a jack's
+// opening, its latch notch and contacts) and, below them, the connection
+// between them, both ways. Line art, so it reads light or dark; iconLight has heavier
+// lines for light themes.
 //
 //go:embed icon.svg
 var icon string
