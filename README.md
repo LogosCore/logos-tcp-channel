@@ -87,6 +87,7 @@ Environment only (a `.env` file fills in what the environment does not set):
 |---|---|---|
 | `CHANNEL_ID` | `tcp-main` | the instance id; run each instance with its own |
 | `LOGOS_CORE_BASE_URL` | `http://localhost:8002` | core's base URL: the control link and the sockets open under it |
+| `LOGOS_CORE_CA_FILE`, `LOGOS_CORE_CERT_SHA256`, `LOGOS_CORE_TLS_INSECURE` | none (the system's trust) | how it trusts core's certificate over HTTPS, for a self-signed one: a PEM to trust, the certificate's SHA-256 fingerprint, or no verification; see [How modules reach core](https://logoscore.github.io/logos-docs/core-infrastructure/#how-modules-reach-core) |
 | `MAX_CONNECTIONS` | `1000` | connections open at once, reverse calls under way among them; one past it fails |
 | `REVERSE_PERSISTENT_LISTEN` | none | `host:port` the channel listens on for reverse-persistent minions (`:4790`: every interface) |
 | `REVERSE_CALL_LISTEN` | none | `host:port` it listens on for reverse-call minions |
