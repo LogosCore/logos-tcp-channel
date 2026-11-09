@@ -80,6 +80,12 @@ func Manifest() protocol.ManagementManifest {
 			{Key: "opens_total", Type: protocol.FieldInt, Label: "Opens"},
 			{Key: "opens_failed_total", Type: protocol.FieldInt, Label: "Opens failed",
 				Description: "Nothing answered (DNS, refused, timeout), a proxy refused, or core did not take the socket."},
+			{Key: "reverse_accepted_total", Type: protocol.FieldInt, Label: "Reverse connections",
+				Description: "Minions that dialed the channel and stayed (reverse-persistent)."},
+			{Key: "reverse_calls_total", Type: protocol.FieldInt, Label: "Reverse calls",
+				Description: "Exchanges of minions that dial the channel for each one (reverse-call)."},
+			{Key: "reverse_calls_failed_total", Type: protocol.FieldInt, Label: "Reverse calls failed",
+				Description: "Core did not take the message, or did not answer within the sync timeout."},
 			{Key: "draining", Type: protocol.FieldBool, Label: "Draining", Alert: true},
 		},
 	}
@@ -103,7 +109,8 @@ func New(cfg config.Config, r *relay.Relay, level *slog.LevelVar) (*mgmt.Server,
 	s.Status(func() map[string]any {
 		st := r.Stats()
 		return map[string]any{"link_up": st.LinkUp, "connections_open": st.Open, "opens_total": st.Opens,
-			"opens_failed_total": st.OpensFailed, "draining": st.Draining}
+			"opens_failed_total": st.OpensFailed, "reverse_accepted_total": st.Accepted, "reverse_calls_total": st.Calls,
+			"reverse_calls_failed_total": st.CallsFailed, "draining": st.Draining}
 	})
 	s.Action("drain", func(_ context.Context, _ map[string]any, actor *protocol.Actor) (any, error) {
 		was := r.Draining()

@@ -1,6 +1,8 @@
 // Command tcp-channel is the TCP channel: it carries bind-persistent
 // connections, dialing a minion's listener when core asks over the control
-// link and relaying its messages over a connection socket to core (docs:
+// link and relaying its messages over a connection socket to core, and the
+// reverse kinds, minions that dial it: reverse-persistent (a connection
+// socket for each) and reverse-call (a sync call for each exchange) (docs:
 // contracts/channel-core-connections/).
 package main
 
@@ -61,12 +63,13 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	r := relay.New(cfg.CoreBaseURL, cfg.ChannelID, cfg.MaxConnections)
+	r := relay.New(cfg.CoreBaseURL, cfg.ChannelID, cfg.MaxConnections).WithSync(relay.NewSync(cfg.CoreBaseURL), cfg.SyncTimeout)
 	mgmtSrv, err := management.New(cfg, r, &level)
 	if err != nil {
 		slog.Warn("management disabled", "err", err)
 	}
-	slog.Info("logos-tcp-channel starting", "channel_id", cfg.ChannelID, "core", cfg.CoreBaseURL, "max_connections", cfg.MaxConnections)
+	slog.Info("logos-tcp-channel starting", "channel_id", cfg.ChannelID, "core", cfg.CoreBaseURL, "max_connections", cfg.MaxConnections,
+		"reverse_persistent", cfg.ReversePersistentListen, "reverse_call", cfg.ReverseCallListen)
 
 	regCtx, stopReg := context.WithCancel(context.Background())
 	regDone := make(chan struct{})
@@ -81,7 +84,7 @@ func main() {
 					ModuleName:  "tcp",
 					Instance:    cfg.ChannelID,
 					Version:     version,
-					Description: "TCP transport: dials minions that listen (bind-persistent) and relays their messages",
+					Description: "TCP transport: dials minions that listen (bind-persistent), takes minions that dial it (reverse-persistent, reverse-call), and relays their messages",
 					Icon:        icon,
 					IconLight:   iconLight,
 				},
@@ -95,6 +98,20 @@ func main() {
 			fatal("control plane failed", "err", err)
 		}
 	}()
+
+	// Minions that dial the channel: reverse-persistent and reverse-call,
+	// each on its own port when configured.
+	listenCtx, stopListening := context.WithCancel(context.Background())
+	defer stopListening()
+	for kind, addr := range map[string]string{protocol.KindReversePersistent: cfg.ReversePersistentListen,
+		protocol.KindReverseCall: cfg.ReverseCallListen} {
+		if addr == "" {
+			continue
+		}
+		if _, err := r.Listen(listenCtx, kind, addr); err != nil {
+			fatal("listen for minions", "kind", kind, "addr", addr, "err", err)
+		}
+	}
 
 	linkCtx, stopLink := context.WithCancel(context.Background())
 	linkDone := make(chan struct{})
@@ -117,6 +134,7 @@ func main() {
 	// No new opens; the connections close (core sees them not connected and
 	// opens again by policy once a channel is back), then it deregisters.
 	r.SetDraining(true)
+	stopListening()
 	r.CloseAll("the channel is stopping")
 	stopLink()
 	select {

@@ -46,9 +46,14 @@ const MaxFrame = 16 + protocol.MaxMinionMessageSize + 4096
 // writeWait bounds writing one frame to the minion.
 const writeWait = 30 * time.Second
 
-// Stats are the relay's counters.
+// Stats are the relay's counters: Open the connections open, of every
+// kind; Opens and OpensFailed core's opens (bind-persistent); Accepted the
+// reverse-persistent connections taken, Calls and CallsFailed the
+// reverse-call exchanges and those core did not take.
 type Stats struct {
 	Open, Opens, OpensFailed int64
+	Accepted, Calls          int64
+	CallsFailed              int64
 	Draining                 bool
 	LinkUp                   bool
 }
@@ -62,9 +67,18 @@ type Relay struct {
 	linkUp   atomic.Bool
 	opens    atomic.Int64
 	failed   atomic.Int64
+	// The reverse kinds' (reverse.go): core's sync call and how long a reply
+	// may take, and their counters.
+	sync        Sync
+	syncTimeout time.Duration
+	accepted    atomic.Int64
+	calls       atomic.Int64
+	callsFailed atomic.Int64
 
 	mu    sync.Mutex
 	conns map[*conn]struct{}
+	// inCalls are the reverse calls under way: they count toward max.
+	inCalls int64
 }
 
 // New is a relay for instance, opening sockets under core's base URL, at
@@ -88,7 +102,8 @@ func (r *Relay) Stats() Stats {
 	r.mu.Lock()
 	open := int64(len(r.conns))
 	r.mu.Unlock()
-	return Stats{Open: open, Opens: r.opens.Load(), OpensFailed: r.failed.Load(), Draining: r.draining.Load(), LinkUp: r.linkUp.Load()}
+	return Stats{Open: open, Opens: r.opens.Load(), OpensFailed: r.failed.Load(), Accepted: r.accepted.Load(), Calls: r.calls.Load(),
+		CallsFailed: r.callsFailed.Load(), Draining: r.draining.Load(), LinkUp: r.linkUp.Load()}
 }
 
 // CloseAll closes every connection open: their sockets to core close with
@@ -322,6 +337,9 @@ type conn struct {
 	core    *connclient.Conn
 	request uint64
 	addr    string
+	// reader is a reverse connection's, which read its first frame already;
+	// nil: one over tcp.
+	reader  *bufio.Reader
 	writeMu sync.Mutex
 	once    sync.Once
 	done    chan struct{}
@@ -329,7 +347,10 @@ type conn struct {
 
 // fromMinion carries the minion's frames to core.
 func (c *conn) fromMinion() {
-	r := bufio.NewReaderSize(c.tcp, 64<<10)
+	r := c.reader
+	if r == nil {
+		r = bufio.NewReaderSize(c.tcp, 64<<10)
+	}
 	for {
 		id, data, err := ReadFrame(r)
 		if err != nil {
@@ -389,6 +410,24 @@ func ReadFrame(r io.Reader) ([]byte, []byte, error) {
 	n := binary.BigEndian.Uint32(head[:])
 	if n < 16+protocol.MinFrameSize || n > MaxFrame {
 		return nil, nil, fmt.Errorf("a frame of %d bytes", n)
+	}
+	b := make([]byte, n)
+	if _, err := io.ReadFull(r, b); err != nil {
+		return nil, nil, err
+	}
+	return b[:16], b[16:], nil
+}
+
+// ReadReply reads a reverse call's reply: a frame whose sealed message may
+// be empty (core had nothing for the minion).
+func ReadReply(r io.Reader) ([]byte, []byte, error) {
+	var head [4]byte
+	if _, err := io.ReadFull(r, head[:]); err != nil {
+		return nil, nil, err
+	}
+	n := binary.BigEndian.Uint32(head[:])
+	if n < 16 || n > MaxFrame {
+		return nil, nil, fmt.Errorf("a reply of %d bytes", n)
 	}
 	b := make([]byte, n)
 	if _, err := io.ReadFull(r, b); err != nil {

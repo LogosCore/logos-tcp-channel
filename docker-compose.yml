@@ -6,7 +6,9 @@
 #   docker compose up -d --build
 #
 # A minion running on this machine is reached as host.docker.internal: add
-# a target with that host (and the minion's listen port).
+# a target with that host (and the minion's listen port). Minions that dial
+# the channel reach it on this machine's ports 4790 (reverse-persistent)
+# and 4791 (reverse-call).
 services:
   tcp-channel:
     build:
@@ -26,6 +28,14 @@ services:
       RABBITMQ_USER: ${RABBITMQ_USER:-logos}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:?set RABBITMQ_PASSWORD in .env}
       RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+      # Minions that dial the channel (reverse-persistent, reverse-call):
+      # where it listens, published on the host's same ports below.
+      REVERSE_PERSISTENT_LISTEN: ${REVERSE_PERSISTENT_LISTEN:-:4790}
+      REVERSE_CALL_LISTEN: ${REVERSE_CALL_LISTEN:-:4791}
+      CORE_SYNC_TIMEOUT: ${CORE_SYNC_TIMEOUT:-30s}
+    ports:
+      - "4790:4790"
+      - "4791:4791"
     extra_hosts:
       - host.docker.internal:host-gateway
     networks:

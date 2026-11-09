@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 )
@@ -27,6 +28,13 @@ type Config struct {
 	RabbitMQURL string
 	// LogFormat is the stderr log format: "json" (default) or "text".
 	LogFormat string
+	// ReversePersistentListen and ReverseCallListen are where the channel
+	// listens for minions that dial it (host:port; "" for none):
+	// REVERSE_PERSISTENT_LISTEN, REVERSE_CALL_LISTEN.
+	ReversePersistentListen, ReverseCallListen string
+	// SyncTimeout bounds a reverse call's sync with core (CORE_SYNC_TIMEOUT,
+	// 30s): keep it below the minions' request timeout.
+	SyncTimeout time.Duration
 }
 
 func envOr(key, fallback string) string {
@@ -66,5 +74,19 @@ func LoadFromEnv(envFile string) (Config, error) {
 	if cfg.LogFormat != "json" && cfg.LogFormat != "text" {
 		return Config{}, fmt.Errorf("LOG_FORMAT must be json or text")
 	}
+	cfg.ReversePersistentListen, cfg.ReverseCallListen = os.Getenv("REVERSE_PERSISTENT_LISTEN"), os.Getenv("REVERSE_CALL_LISTEN")
+	for key, v := range map[string]string{"REVERSE_PERSISTENT_LISTEN": cfg.ReversePersistentListen, "REVERSE_CALL_LISTEN": cfg.ReverseCallListen} {
+		if v == "" {
+			continue
+		}
+		if _, port, err := net.SplitHostPort(v); err != nil || port == "" {
+			return Config{}, fmt.Errorf("%s must be host:port (:4790 for every interface), got %q", key, v)
+		}
+	}
+	d, err := time.ParseDuration(envOr("CORE_SYNC_TIMEOUT", "30s"))
+	if err != nil || d < time.Second || d > 10*time.Minute {
+		return Config{}, fmt.Errorf("CORE_SYNC_TIMEOUT must be a duration from 1s to 10m")
+	}
+	cfg.SyncTimeout = d
 	return cfg, nil
 }

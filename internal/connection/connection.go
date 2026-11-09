@@ -1,7 +1,8 @@
-// Package connection declares the channel's connection schema: the one kind
-// it carries, bind-persistent, with what is built into a minion that
+// Package connection declares the channel's connection schema: the kinds
+// it carries. bind-persistent, with what is built into a minion that
 // listens (Fields) and what operators fill in for each deployment of one
-// (Target).
+// (Target); reverse-persistent and reverse-call, with what is built into a
+// minion that dials the channel (Fields): where the channel listens.
 package connection
 
 import (
@@ -19,6 +20,29 @@ func Schema() protocol.ConnectionSchema {
 		SchemaVersion: protocol.ConnectionSchemaV2,
 		Version:       Version,
 		Kinds: map[string]protocol.ConnectionKind{
+			protocol.KindReversePersistent: {Fields: append(dialFields("The port the channel listens on for minions that stay connected (its REVERSE_PERSISTENT_LISTEN)."),
+				protocol.FieldSpec{
+					Key: "keepalive", Type: protocol.FieldDuration, Label: "Keepalive", Default: "30s", Min: "5s", Max: "1h",
+					Description: "TCP keepalive on the connection: a channel gone without a word is found.",
+					Group:       "Connection", Order: 4,
+				},
+				protocol.FieldSpec{
+					Key: "reconnect_backoff", Type: protocol.FieldDuration, Label: "Reconnect backoff", Default: "60s", Min: "1s", Max: "1h",
+					Description: "The longest wait between dials once the connection closed: from 1s, doubling up to it.",
+					Group:       "Connection", Order: 5,
+				},
+				checkinInterval("How soon core expects the minion back once its connection closed: late, then lost, run by it. While it is open no check-in is needed."),
+				checkinJitter(),
+			)},
+			protocol.KindReverseCall: {Fields: append(dialFields("The port the channel listens on for minions that dial it for each exchange (its REVERSE_CALL_LISTEN)."),
+				protocol.FieldSpec{
+					Key: "request_timeout", Type: protocol.FieldDuration, Label: "Request timeout", Default: "40s", Min: "1s", Max: "10m",
+					Description: "How long the minion waits for core's reply. Keep it above the channel's CORE_SYNC_TIMEOUT (30s).",
+					Group:       "Connection", Order: 4,
+				},
+				checkinInterval("How often the minion dials the channel with nothing to send."),
+				checkinJitter(),
+			)},
 			protocol.KindBindPersistent: {
 				Fields: []protocol.FieldSpec{
 					{
@@ -67,4 +91,35 @@ func Schema() protocol.ConnectionSchema {
 			},
 		},
 	}
+}
+
+// dialFields are where a minion that dials the channel finds it: its
+// address, the port of the kind's listener, and how long a dial may take.
+func dialFields(port string) []protocol.FieldSpec {
+	return []protocol.FieldSpec{
+		{
+			Key: "host", Type: protocol.FieldString, Label: "Host", Required: true, MaxLength: 255,
+			Description: "The channel's address or name, as the minion reaches it.",
+			Group:       "Address", Order: 1, Placeholder: "203.0.113.10",
+		},
+		{
+			Key: "port", Type: protocol.FieldInt, Label: "Port", Required: true, Min: 1, Max: 65535,
+			Description: port, Group: "Address", Order: 2,
+		},
+		{
+			Key: "connect_timeout", Type: protocol.FieldDuration, Label: "Connect timeout", Default: "10s", Min: "1s", Max: "2m",
+			Description: "How long a dial may take before the exchange fails.",
+			Group:       "Connection", Order: 3,
+		},
+	}
+}
+
+func checkinInterval(help string) protocol.FieldSpec {
+	return protocol.FieldSpec{Key: "checkin_interval", Type: protocol.FieldDuration, Label: "Check-in interval", Default: "60s",
+		Min: "1s", Max: "168h", Description: help, Group: "Timing", Order: 10}
+}
+
+func checkinJitter() protocol.FieldSpec {
+	return protocol.FieldSpec{Key: "checkin_jitter", Type: protocol.FieldInt, Label: "Check-in jitter", Default: 20, Min: 0, Max: 100,
+		Unit: "%", Description: "Random spread around the interval, either way.", Group: "Timing", Order: 11}
 }
