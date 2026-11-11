@@ -31,3 +31,30 @@ func TestSchema(t *testing.T) {
 		t.Fatalf("an ftp proxy taken: %v", p)
 	}
 }
+
+// A minion that reads a minion config reads its connection by these
+// numbers: each stays its field's, the same in every kind and in a target's
+// fields.
+func TestFieldNumbers(t *testing.T) {
+	want := map[string]int{
+		"host": 1, "port": 2, "connect_timeout": 3, "keepalive": 4, "reconnect_backoff": 5, "request_timeout": 6,
+		"checkin_interval": 7, "checkin_jitter": 8, "listen_port": 9, "listen_address": 10, "max_connections": 11,
+		"proxy": 12,
+	}
+	s := Schema()
+	for kind, k := range s.Kinds {
+		if !s.Numbered(kind) {
+			t.Errorf("%s: fields without numbers", kind)
+		}
+		for _, f := range k.Fields {
+			if f.Num != want[f.Key] {
+				t.Errorf("%s: %s is %d, want %d", kind, f.Key, f.Num, want[f.Key])
+			}
+		}
+		for _, f := range k.Target {
+			if f.Num != want[f.Key] {
+				t.Errorf("%s: target field %s is %d, want %d", kind, f.Key, f.Num, want[f.Key])
+			}
+		}
+	}
+}

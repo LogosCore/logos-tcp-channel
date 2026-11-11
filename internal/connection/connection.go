@@ -12,6 +12,12 @@ import (
 // Version is the built-in fields' version: raise it when minions built
 // against the current fields would read new ones wrongly. Target fields
 // change without it: nothing is built from them.
+//
+// Every field has a number too (FieldSpec.Num), the same in each kind that
+// has it, target fields sharing the numbering (a key there keeps its
+// number): a minion that reads a minion config reads it by that number
+// alone. A number stays its field's: a new field takes the next one, and a
+// removed field's is never given again.
 const Version = 1
 
 // Schema is the connection schema declared at registration.
@@ -22,12 +28,12 @@ func Schema() protocol.ConnectionSchema {
 		Kinds: map[string]protocol.ConnectionKind{
 			protocol.KindReversePersistent: {Fields: append(dialFields("The port the channel listens on for minions that stay connected (its REVERSE_PERSISTENT_LISTEN)."),
 				protocol.FieldSpec{
-					Key: "keepalive", Type: protocol.FieldDuration, Label: "Keepalive", Default: "30s", Min: "5s", Max: "1h",
+					Key: "keepalive", Num: 4, Type: protocol.FieldDuration, Label: "Keepalive", Default: "30s", Min: "5s", Max: "1h",
 					Description: "TCP keepalive on the connection: a channel gone without a word is found.",
 					Group:       "Connection", Order: 4,
 				},
 				protocol.FieldSpec{
-					Key: "reconnect_backoff", Type: protocol.FieldDuration, Label: "Reconnect backoff", Default: "60s", Min: "1s", Max: "1h",
+					Key: "reconnect_backoff", Num: 5, Type: protocol.FieldDuration, Label: "Reconnect backoff", Default: "60s", Min: "1s", Max: "1h",
 					Description: "The longest wait between dials once the connection closed: from 1s, doubling up to it.",
 					Group:       "Connection", Order: 5,
 				},
@@ -36,7 +42,7 @@ func Schema() protocol.ConnectionSchema {
 			)},
 			protocol.KindReverseCall: {Fields: append(dialFields("The port the channel listens on for minions that dial it for each exchange (its REVERSE_CALL_LISTEN)."),
 				protocol.FieldSpec{
-					Key: "request_timeout", Type: protocol.FieldDuration, Label: "Request timeout", Default: "40s", Min: "1s", Max: "10m",
+					Key: "request_timeout", Num: 6, Type: protocol.FieldDuration, Label: "Request timeout", Default: "40s", Min: "1s", Max: "10m",
 					Description: "How long the minion waits for core's reply. Keep it above the channel's CORE_SYNC_TIMEOUT (30s).",
 					Group:       "Connection", Order: 4,
 				},
@@ -46,44 +52,44 @@ func Schema() protocol.ConnectionSchema {
 			protocol.KindBindPersistent: {
 				Fields: []protocol.FieldSpec{
 					{
-						Key: "listen_port", Type: protocol.FieldInt, Label: "Listen port", Required: true, Min: 1, Max: 65535,
+						Key: "listen_port", Num: 9, Type: protocol.FieldInt, Label: "Listen port", Required: true, Min: 1, Max: 65535,
 						Description: "The TCP port the minion listens on. The channel dials it, unless a target says another (a port forward).",
 						Group:       "Listener", Order: 1,
 					},
 					{
-						Key: "listen_address", Type: protocol.FieldString, Label: "Listen address", Default: "0.0.0.0", MaxLength: 255,
+						Key: "listen_address", Num: 10, Type: protocol.FieldString, Label: "Listen address", Default: "0.0.0.0", MaxLength: 255,
 						Description: "The interface the minion binds: 0.0.0.0 every IPv4 one, :: IPv6 too, 127.0.0.1 one reached only from its own host (through a tunnel).",
 						Group:       "Listener", Order: 2,
 					},
 					{
-						Key: "max_connections", Type: protocol.FieldInt, Label: "Connections at once", Default: 1, Min: 1, Max: 16,
+						Key: "max_connections", Num: 11, Type: protocol.FieldInt, Label: "Connections at once", Default: 1, Min: 1, Max: 16,
 						Description: "Connections the minion takes at once. More than one lets a new dial in while an old one has not timed out yet.",
 						Group:       "Listener", Order: 3,
 					},
 					{
-						Key: "keepalive", Type: protocol.FieldDuration, Label: "Keepalive", Default: "30s", Min: "5s", Max: "1h",
+						Key: "keepalive", Num: 4, Type: protocol.FieldDuration, Label: "Keepalive", Default: "30s", Min: "5s", Max: "1h",
 						Description: "TCP keepalive on a connection, the minion's and the channel's: a peer gone without a word is found.",
 						Group:       "Connection", Order: 4,
 					},
 				},
 				Target: []protocol.FieldSpec{
 					{
-						Key: "host", Type: protocol.FieldString, Label: "Host", Required: true, MaxLength: 255,
+						Key: "host", Num: 1, Type: protocol.FieldString, Label: "Host", Required: true, MaxLength: 255,
 						Description: "The address or name the channel dials.",
 						Group:       "Address", Order: 1, Placeholder: "10.0.12.7",
 					},
 					{
-						Key: "port", Type: protocol.FieldInt, Label: "Port", Min: 1, Max: 65535,
+						Key: "port", Num: 2, Type: protocol.FieldInt, Label: "Port", Min: 1, Max: 65535,
 						Description: "The port to dial when it is not the minion's listen port (a port forward, a NAT). Empty: the listen port.",
 						Group:       "Address", Order: 2,
 					},
 					{
-						Key: "proxy", Type: protocol.FieldURL, Label: "Proxy", MaxLength: 2048,
+						Key: "proxy", Num: 12, Type: protocol.FieldURL, Label: "Proxy", MaxLength: 2048,
 						Description: "Dial through a proxy: socks5://host:port (an SSH dynamic forward, a pivot) or http://host:port (CONNECT).",
 						Group:       "Address", Order: 3, Pattern: `^(socks5|socks5h|http)://[^\s]+$`,
 					},
 					{
-						Key: "connect_timeout", Type: protocol.FieldDuration, Label: "Connect timeout", Default: "10s", Min: "1s", Max: "2m",
+						Key: "connect_timeout", Num: 3, Type: protocol.FieldDuration, Label: "Connect timeout", Default: "10s", Min: "1s", Max: "2m",
 						Description: "How long a dial may take before the open fails.",
 						Group:       "Connection", Order: 4,
 					},
@@ -98,16 +104,16 @@ func Schema() protocol.ConnectionSchema {
 func dialFields(port string) []protocol.FieldSpec {
 	return []protocol.FieldSpec{
 		{
-			Key: "host", Type: protocol.FieldString, Label: "Host", Required: true, MaxLength: 255,
+			Key: "host", Num: 1, Type: protocol.FieldString, Label: "Host", Required: true, MaxLength: 255,
 			Description: "The channel's address or name, as the minion reaches it.",
 			Group:       "Address", Order: 1, Placeholder: "203.0.113.10",
 		},
 		{
-			Key: "port", Type: protocol.FieldInt, Label: "Port", Required: true, Min: 1, Max: 65535,
+			Key: "port", Num: 2, Type: protocol.FieldInt, Label: "Port", Required: true, Min: 1, Max: 65535,
 			Description: port, Group: "Address", Order: 2,
 		},
 		{
-			Key: "connect_timeout", Type: protocol.FieldDuration, Label: "Connect timeout", Default: "10s", Min: "1s", Max: "2m",
+			Key: "connect_timeout", Num: 3, Type: protocol.FieldDuration, Label: "Connect timeout", Default: "10s", Min: "1s", Max: "2m",
 			Description: "How long a dial may take before the exchange fails.",
 			Group:       "Connection", Order: 3,
 		},
@@ -115,11 +121,11 @@ func dialFields(port string) []protocol.FieldSpec {
 }
 
 func checkinInterval(help string) protocol.FieldSpec {
-	return protocol.FieldSpec{Key: "checkin_interval", Type: protocol.FieldDuration, Label: "Check-in interval", Default: "60s",
+	return protocol.FieldSpec{Key: "checkin_interval", Num: 7, Type: protocol.FieldDuration, Label: "Check-in interval", Default: "60s",
 		Min: "1s", Max: "168h", Description: help, Group: "Timing", Order: 10}
 }
 
 func checkinJitter() protocol.FieldSpec {
-	return protocol.FieldSpec{Key: "checkin_jitter", Type: protocol.FieldInt, Label: "Check-in jitter", Default: 20, Min: 0, Max: 100,
+	return protocol.FieldSpec{Key: "checkin_jitter", Num: 8, Type: protocol.FieldInt, Label: "Check-in jitter", Default: 20, Min: 0, Max: 100,
 		Unit: "%", Description: "Random spread around the interval, either way.", Group: "Timing", Order: 11}
 }
