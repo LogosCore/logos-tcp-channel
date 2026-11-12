@@ -62,10 +62,16 @@ func LoadFromEnv(envFile string) (Config, error) {
 		return Config{}, fmt.Errorf("MAX_CONNECTIONS must be an integer from 1 to 100000")
 	}
 	cfg.MaxConnections = n
+	// Core's broker: its user is logos-core's RABBITMQ_DEFAULT_USER; its
+	// password (RABBITMQ_DEFAULT_PASS) has no default that could fit.
+	password := os.Getenv("RABBITMQ_PASSWORD")
+	if password == "" {
+		return Config{}, fmt.Errorf("RABBITMQ_PASSWORD is required: core's broker password (logos-core's RABBITMQ_DEFAULT_PASS)")
+	}
 	vhost := envOr("RABBITMQ_VHOST", "/")
 	cfg.RabbitMQURL = (&url.URL{
 		Scheme: "amqp",
-		User:   url.UserPassword(envOr("RABBITMQ_USER", "guest"), envOr("RABBITMQ_PASSWORD", "guest")),
+		User:   url.UserPassword(envOr("RABBITMQ_USER", "logos"), password),
 		Host:   net.JoinHostPort(envOr("RABBITMQ_HOST", "localhost"), envOr("RABBITMQ_PORT", "5672")),
 		// amqp091 takes the vhost from the path minus its leading "/".
 		Path: "/" + vhost,

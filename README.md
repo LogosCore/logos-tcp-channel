@@ -93,7 +93,8 @@ Environment only (a `.env` file fills in what the environment does not set):
 | `REVERSE_CALL_LISTEN` | none | `host:port` it listens on for reverse-call minions |
 | `CORE_SYNC_TIMEOUT` | `30s` | how long a reverse call waits for core: keep it below the minions' `request_timeout` |
 | `LOG_FORMAT` | `json` | `json` or `text`, on stderr |
-| `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD`, `RABBITMQ_VHOST` | `localhost`, `5672`, `guest`, `guest`, `/` | core's RabbitMQ |
+| `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_VHOST` | `localhost`, `5672`, `logos`, `/` | core's RabbitMQ (logos-core's dev stack, from the host) |
+| `RABBITMQ_PASSWORD` | none: required | its password, logos-core's `RABBITMQ_DEFAULT_PASS` |
 
 ## Management
 
